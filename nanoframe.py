@@ -51,6 +51,16 @@ class NanoFrame():
 
     def __setitem__(self, key, val):
         self.table_[key] = val
+
+    @property
+    def objects(self):
+        'branch groups available'
+        return list(
+            set(
+                i.split('_')[0] for i in self.keys_ 
+                if '_' in i
+            )
+        )
         
     @property
     def keys(self):
