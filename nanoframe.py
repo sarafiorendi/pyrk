@@ -2,38 +2,55 @@ import awkward as awk
 from coffea.analysis_objects import JaggedCandidateArray
 import uproot
 import uproot_methods
+from pdb import set_trace
 
 class NanoFrame():
     'Simple class that provides a lazy interface with the NanoAODs'
-    def __init__(self, infile):
-        self.uf = uproot.open(infile)
-        self.tt = self.uf['Events']
-        self.keys_ = set([i.decode() for i in self.tt.keys()])
+    def __init__(self, *infiles, branches = []):
+        if all(isinstance(i, dict) for i in infiles):
+            self.tts = infiles
+            self.keys_ = set(self.tts[0].keys()) if not branches else set(branches)
+            self.dict_like_ = True
+        elif all(not isinstance(i, dict) for i in infiles):
+            self.ufs = map(uproot.open, infiles)
+            self.tts = [i['Events'] for i in self.ufs]
+            self.keys_ = set([i.decode() for i in self.tts[0].keys()]) if not branches else set(branches)
+            self.dict_like_ = False
+        else:
+            raise RuntimeError('Cannot mix files and dicts!')
         self.cache_ = set()
+        self.used_branches_ = set()
         self.table_ = awk.Table()
+
+    def array(self, key):
+        self.used_branches_.add(key)
+        return awk.concatenate([
+            i.array(key) if not self.dict_like_ else i[key]
+            for i in self.tts
+        ])
 
     def __getitem__(self, key):
         if key in self.cache_:
             return self.table_[key]
         elif key in self.keys_:
-            ret = self.tt.array(key)
+            ret = self.array(key)
             self.table_[key] = ret
             self.cache_.add(key)
             return self.table_[key]
         else:
             branch = key + '_'
             subset = [k for k in self.keys_ if k.startswith(branch)]
-            info = {i.replace(branch, '') : self.tt.array(i) for i in subset}
+            info = {i.replace(branch, '') : self.array(i) for i in subset}
             counter = 'n' + key
             counts = 0
             if counter in self.keys_:
-                counts = self.tt.array(counter)
+                counts = self.array(counter)
                 for name, branch in info.items():
-                    if not (branch.count() == counts).all():
+                    if not (branch.counts == counts).all():
                         raise ValueError(f'Key {name} does not have the right shape')
                 info = {i : j.content for i, j in info.items()}
             #check that everything is there to make a p4
-            if all(i in info for i in ['pt', 'eta', 'phi', 'mass']): 
+            if all(i in info for i in ['pt', 'eta', 'phi', 'mass']): # FIXME! wrong logic
                 ret = JaggedCandidateArray.candidatesfromcounts(
                     counts,
                     **info
@@ -51,6 +68,10 @@ class NanoFrame():
 
     def __setitem__(self, key, val):
         self.table_[key] = val
+
+    @property
+    def used_branches(self):
+        return sorted(list(self.used_branches_))
 
     @property
     def objects(self):
