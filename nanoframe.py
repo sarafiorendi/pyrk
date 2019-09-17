@@ -3,21 +3,28 @@ from coffea.analysis_objects import JaggedCandidateArray
 import uproot
 import uproot_methods
 from pdb import set_trace
+from fnmatch import fnmatch
 
 class NanoFrame():
     'Simple class that provides a lazy interface with the NanoAODs'
     def __init__(self, *infiles, branches = []):
         if all(isinstance(i, dict) for i in infiles):
             self.tts = infiles
-            self.keys_ = set(self.tts[0].keys()) if not branches else set(branches)
+            self.keys_ = set(self.tts[0].keys())
             self.dict_like_ = True
         elif all(not isinstance(i, dict) for i in infiles):
             self.ufs = map(uproot.open, infiles)
             self.tts = [i['Events'] for i in self.ufs]
-            self.keys_ = set([i.decode() for i in self.tts[0].keys()]) if not branches else set(branches)
+            self.keys_ = set([i.decode() for i in self.tts[0].keys()])
             self.dict_like_ = False
         else:
             raise RuntimeError('Cannot mix files and dicts!')
+
+        if branches:
+            self.keys_ = set(
+                i for i in self.keys_ 
+                if any(fnmatch(i, branch) for branch in branches)
+                )
         self.cache_ = set()
         self.used_branches_ = set()
         self.table_ = awk.Table()
