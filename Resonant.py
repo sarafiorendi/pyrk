@@ -16,11 +16,17 @@ import uproot_methods
 final_dfs = {
     'pf' : pd.DataFrame(),
     'lpt' : pd.DataFrame(),
+    'mix' : pd.DataFrame(),
 }
 
-branches = ['BToKEE_charge',
+branches = [
+ 'event',
+ 'run',
+ 'luminosityBlock', 
+ 'BToKEE_charge',
  'BToKEE_chi2',
  'BToKEE_fit_cos2D',
+ 'BToKEE_cos2D',
  'BToKEE_fit_eta',
  'BToKEE_fit_mass',
  'BToKEE_fit_phi',
@@ -72,7 +78,6 @@ from pdb import set_trace
 for fname in infiles:
     print('processing:', fname)
     nf = NanoFrame(fname, branches = branches)
-    
     # Load the needed collections, NanoFrame is just an empty shell until we call the collections
     
     muons = nf['Muon']
@@ -80,7 +85,7 @@ for fname in infiles:
     tracks = nf['ProbeTracks']
     hlt = nf['HLT']
     bcands = nf['BToKEE']
-    
+
     nprocessed += hlt.shape[0]
     # Attach the objects to the candidates
     bcands['e1'] = electrons[bcands['l1Idx']]
@@ -89,8 +94,11 @@ for fname in infiles:
     bcands['p4fit'] = uproot_methods.TLorentzVectorArray.from_ptetaphim(
         bcands['fit_pt'], bcands['fit_eta'], bcands['fit_phi'], bcands['fit_mass']
     )
-    
-    
+    bcands['event'] = nf['event']
+    bcands['run'] = nf['run']
+    bcands['luminosityBlock'] = nf['luminosityBlock']    
+    bcands['l_xy_sig'] = bcands.l_xy / np.sqrt(bcands.l_xy_unc)
+
     # Attach the trigger muon, identified as the closest in dz to the lead electron
     muon_trg_mask = (muons.isTriggering == 1)
     for path, pt_thr in [('Mu8_IP5', 8), ('Mu10p5_IP3p5', 10), ('Mu8_IP3', 8), ('Mu8p5_IP3p5', 8.5), 
@@ -107,21 +115,23 @@ for fname in infiles:
     
     one_trg_muon = (muon_trg_mask.sum() != 0)
     trig_mu = muons[muon_trg_mask][one_trg_muon]
-    bcands = bcands[one_trg_muon]
+    # bcands = bcands[one_trg_muon]
     
-    e1z, muz = bcands.e1.vz.cross(trig_mu.vz, nested = True).unzip()
-    closest_mu = np.abs(e1z - muz).argmin().flatten(axis = 1)
-    bcands['trg_mu'] = trig_mu[closest_mu]
+    # e1z, muz = bcands.e1.vz.cross(trig_mu.vz, nested = True).unzip()
+    # closest_mu = np.abs(e1z - muz).argmin().flatten(axis = 1)
+    # bcands['trg_mu'] = trig_mu[closest_mu]
     
     
     # Candidate selection, cut-based for the moment
     
-    b_selection = (bcands.k.p4.pt > 1.5) & (bcands.p4fit.pt > 3) & \
-                  (bcands.svprob > 0.1) & (bcands.fit_cos2D > 0.999) & \
-                  ((bcands.l_xy / bcands.l_xy_unc) > 6)
+    b_selection = (bcands.k.p4.pt > 3) & (bcands.k.DCASig > 2) & (bcands.p4.pt > 3) & \
+                  (bcands.svprob > 0.1) & (bcands.cos2D > 0.999) & \
+                  (bcands.l_xy_sig > 6)
     
     b_pf = bcands.e1.isPF & bcands.e2.isPF
     b_lpt = bcands.e1.isLowPt & bcands.e2.isLowPt & (bcands.e1.mvaId > 3.96) & (bcands.e2.mvaId > 3.96)
+    b_mix = (bcands.e1.isLowPt & (bcands.e1.mvaId > 3.96) & bcands.e2.isPF) | \
+            (bcands.e2.isLowPt & (bcands.e2.mvaId > 3.96) & bcands.e1.isPF)
     
     best_pf_cand = bcands[b_selection & b_pf].svprob.argmax()
     bcands_pf = (bcands[b_selection & b_pf][best_pf_cand]).flatten()
@@ -129,13 +139,20 @@ for fname in infiles:
     best_lpt_cand = bcands[b_selection & b_lpt].svprob.argmax()
     bcands_lpt = (bcands[b_selection & b_lpt][best_lpt_cand]).flatten()
     
-    dfs = {
-        'pf' : pd.DataFrame(),
-        'lpt' : pd.DataFrame(),
-    }
+    best_mix_cand = bcands[b_selection & b_mix].svprob.argmax()
+    bcands_mix = (bcands[b_selection & b_mix][best_mix_cand]).flatten()
     
-    for name, tab, sel in [('pf', bcands_pf, b_selection & b_pf), ('lpt', bcands_lpt, b_selection & b_lpt)]:
+    dfs = {}
+    for name, tab, sel in [
+            ('pf', bcands_pf, b_selection & b_pf), 
+            ('lpt', bcands_lpt, b_selection & b_lpt),
+            ('mix', bcands_mix, b_selection & b_mix),
+    ]:
+        dfs[name] = pd.DataFrame()
         df = dfs[name]
+        df['event'] = tab['event']
+        df['run'] = tab['run']
+        df['luminosityBlock'] = tab['luminosityBlock']
         df['e1pt'] = tab.e1.p4.pt
         df['e2pt'] = tab.e2.p4.pt
         df['e1pf'] = tab.e1.isPF
@@ -145,24 +162,31 @@ for fname in infiles:
         df['kpt'] = tab.k.p4.pt
         df['kDCA'] = tab.k.DCASig
         df['Bcharge'] = tab.charge
-        df['Bpt'] = tab.p4fit.pt
-        df['Beta'] = tab.p4fit.eta
+        df['Bfit_pt'] = tab.p4fit.pt
+        df['Bfit_eta'] = tab.p4fit.eta
+        df['Bpt'] = tab.p4.pt
+        df['Beta'] = tab.p4.eta
         df['Bsvprob'] = tab.e2.p4.pt
-        df['Bcos2D'] = tab.fit_cos2D
-        df['Blxy_sig'] = (tab.l_xy / tab.l_xy_unc)
+        df['Bcos2D'] = tab.cos2D
+        df['BfitCos2D'] = tab.fit_cos2D
+        df['Blxy_sig'] = tab.l_xy_sig
         df['Bmll'] = tab.mll_fullfit
         df['Bmll_raw'] = tab.mll_raw
         df['Bmll_llfit'] = tab.mll_llfit
         df['Bmass'] = tab.fit_mass
         df['Bmass_raw'] = tab.p4.mass
-        df['trgmu_eta'] = tab.trg_mu.p4.eta
-        df['trgmu_pt'] = tab.trg_mu.p4.pt
+        # df['trgmu_eta'] = tab.trg_mu.p4.eta
+        # df['trgmu_pt'] = tab.trg_mu.p4.pt
         df['nB'] = sel.sum()[sel.sum() != 0]
     
     final_dfs['lpt'] = pd.concat((final_dfs['lpt'], dfs['lpt']))
     final_dfs['pf'] = pd.concat((final_dfs['pf'], dfs['pf']))
+    final_dfs['mix'] = pd.concat((final_dfs['mix'], dfs['mix']))
 
-final_dfs['lpt'].to_hdf(args.f_out, 'lpt', mode = 'a')
+final_dfs['lpt'].to_hdf(args.f_out, 'lpt', mode = 'w')
 final_dfs['pf'].to_hdf(args.f_out, 'pf', mode = 'a')
+final_dfs['mix'].to_hdf(args.f_out, 'mix', mode = 'a')
 print('DONE! Processed events: ', nprocessed)
-print('PF size:', final_dfs['pf'].shape[0], 'LPT size:', final_dfs['lpt'].shape[0])
+print('PF size:', final_dfs['pf'].shape[0], 'LPT size:', 
+      final_dfs['lpt'].shape[0], 'MIX size:', 
+      final_dfs['mix'].shape[0])
