@@ -6,6 +6,7 @@ parser.add_argument('f_in', help='file path')
 parser.add_argument('f_out', help='file path')
 parser.add_argument('nchunks', type=int)
 parser.add_argument('ichunk', type=int)
+parser.add_argument('--mc', action = 'store_true')
 args = parser.parse_args()
 
 all_files = [i.strip() for i in open(args.f_in) if i.strip() and not i.startswith('#')]
