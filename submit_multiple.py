@@ -83,7 +83,6 @@ mv *.root {out}
 )
 subprocess.call(['chmod', '+x', bname])
 
-# time python /afs/cern.ch/work/f/fiorendi/private/parking/pyrk/pyrk/skim_kee.py $@
 # setenv PATH /afs/cern.ch/user/f/fiorendi//miniconda3/bin:$PATH
 
 ## write the cfg for condor submission condor_multiple_readnano.cfg
@@ -116,87 +115,8 @@ Queue {njobs}
 # environment = "LS_SUBCWD=/afs/cern.ch/work/f/fiorendi/private/parking/read_nano//eos/cms/store/user/fiorendi/parking/readnano/jpsimc_ee_kcvf"
 # request_memory = 2000
 # +JobFlavour = "longlunch"
-# 
-# queue 74
 
 # submit to the queue
 print 'condor_submit {CFG}'.format(CFG = newfolder + '/condor_sub.cfg')
 if not options.test:
     os.system("condor_submit {CFG}".format(CFG = newfolder + '/condor_sub.cfg'))   
-
-
-
-
-# myworkingfolder = '/afs/cern.ch/work/f/fiorendi/private/parking/read_nano/'
-# 
-# 
-# nfinal = int(options.start)+int(njobs)
-# nfirst = int(options.start)
-# 
-# os.system('cp {LIST} {FOLDER}'.format(LIST=options.inputfiles, FOLDER=newfolder))
-# # os.chdir(os.getcwd() +'/' + newfolder)
-# 
-# 
-# for j in range(njobs): 
-# #     k = j
-# #     i_job = nfirst + j
-#     i_job = nfirst + j
-#     print "j is " + str(j), " n job is ", i_job
-#     sh     = open(myworkingfolder+"script_condor_template.sh")
-#     shName = "scripts/script_{NUM}.sh".format(NUM=str(j))
-# #     shName = newfolder + "/scripts/script_{NUM}.sh".format(NUM=str(j))
-#     sh1    = open(shName,"w")
-#     subprocess.call(['chmod', '+x', shName])
-#     for shline in sh:
-# #       mycfg = None
-# #       myres = None
-#         if 'thefolder'  in shline:
-#             shline = shline.replace('thefolder', options.outdir.rstrip())
-#             shline = shline.replace('thenumber', str(i_job))
-#             shline = shline.replace('theera'   , options.era)
-#             if options.mc == True:
-#                 shline = shline.replace('thechan'  , 'thechan --mc ')
-#             shline = shline.replace('thechan'  , options.channel)
-#             shline = shline.replace('XX'       , datastr)
-#                 
-#         elif 'FILELIST'  in shline:
-#             shline = shline.replace('FILELIST', '{FILELIST}'.format(FILELIST=str(options.inputfiles))).rstrip()
-#         elif 'TYPE_ERA_NN' in shline:
-#             shline = shline.replace('ERA'   , options.era)
-#             shline = shline.replace('TYPE'  , options.channel)
-#             shline = shline.replace('NN'    , str(i_job))
-# 
-# #             shline = shline.replace('FOLDER', '{FOLDER}'    .format(FOLDER=options.outdir )).rstrip()
-#         print >> sh1,shline.strip()
-#         
-#     sh.close()
-#     sh1.close()
-# 
-# 
-# # now write the .cfg file to sbmit via condor
-# cfgName = "condor_multiple_readnano.cfg"#.format(DIR=options.outdir)
-# cfg     = open(myworkingfolder + "/condor_multiple.cfg")
-# cfg1    = open(cfgName,"w")
-# to_sub = ['Log', 'Output','Error']
-# for cfgline in cfg:
-# # 	if 'script_NN'  in cfgline:
-# # 		cfgline = cfgline.replace('NN', '{K}'.format(K=str(k))).rstrip()
-# # 		print >> cfg1, cfgline.rstrip()
-# # 	if any(lll in cfgline for lll in to_sub):
-# # 		cfgline = cfgline.replace('FOLDER', '{FOLDER}'.format(FOLDER = newfolder)).rstrip()
-# # 		cfgline = cfgline.replace('KINDEX', '{K}'.format(K=str(k))).rstrip()
-# # 		print >> cfg1, cfgline.rstrip()
-# 	if 'FOLDER' in cfgline:
-# 		cfgline = cfgline.replace('FOLDER', '{FOLDER}'.format(FOLDER = newfolder)).rstrip()
-# 		print >> cfg1, cfgline.rstrip()
-# 	elif 'INFILE' in cfgline:
-# 		cfgline = cfgline.replace('INFILE', '{LIST}'.format(LIST=str(options.inputfiles))).rstrip()
-# 		print >> cfg1, cfgline.rstrip()
-# 	elif 'queue' in cfgline:
-# 		cfgline = cfgline.replace('queue', 'queue {N}'.format(N=str(njobs))).rstrip()
-# 		print >> cfg1, cfgline.rstrip()
-# 	else: 
-# 	  print >> cfg1, cfgline.rstrip()
-# cfg1.close()
-# cfg.close()
-# 
