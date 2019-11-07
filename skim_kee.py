@@ -13,6 +13,7 @@ import pandas as pd
 import uproot_methods
 
 
+
 final_df = pd.DataFrame()
 
 branches = [
@@ -114,9 +115,27 @@ for fname in infiles:
 
     nprocessed += hlt.shape[0]
     # Attach the objects to the candidates
-    electrons['genPdgId']    = gen[electrons['genPartIdx']].pdgId
-    electrons['motherPdgId'] = gen[gen[electrons['genPartIdx']].genPartIdxMother].pdgId
-    tracks['genPdgId']       = gen[tracks['genPartIdx']].pdgId
+#     set_trace()
+    ele_gen_idx = (electrons.genPartIdx != -1) * electrons.genPartIdx
+    electrons['genPdgId'] = gen[ ele_gen_idx ].pdgId
+    electrons['isGenEle'] = abs(electrons['genPdgId']) == 11
+
+    mom_gen_idx = (gen[ele_gen_idx].genPartIdxMother != -1) * (gen[ele_gen_idx].genPartIdxMother)
+#     hasMother   = gen[ ele_gen_idx ].genPartIdxMother != -1
+    electrons['motherPdgId'] = gen[mom_gen_idx].pdgId
+
+
+    jpsi_ele = electrons['isGenEle'] * (electrons.motherPdgId == 443)
+    gma_gen_idx = (gen[mom_gen_idx].genPartIdxMother != -1) * (gen[mom_gen_idx].genPartIdxMother)
+    jpsi_mum = jpsi_ele * gen[gma_gen_idx] 
+    electrons['granmaPdgId'] = jpsi_mum.pdgId
+
+    
+#     set_trace()
+    trk_gen_idx = (tracks.genPartIdx != -1) * tracks.genPartIdx
+    tracks['genPdgId']       = gen[trk_gen_idx].pdgId
+    trk_mom_gen_idx = (gen[trk_gen_idx].genPartIdxMother != -1) * (gen[trk_gen_idx].genPartIdxMother)
+    tracks['motherPdgId']    = gen[trk_mom_gen_idx].pdgId
 
     bcands['e1'] = electrons[bcands['l1Idx']]
     bcands['e2'] = electrons[bcands['l2Idx']]
@@ -159,8 +178,10 @@ for fname in infiles:
     # Candidate selection, cut-based for the moment
     
     b_selection = (bcands.e1.mvaId > -10.) & (bcands.e2.mvaId > -10.)  &\
-                  (bcands.k.isMatchedToEle == 0) & (bcands.k.isMatchedToSoftMuon == 0) & \
                   (bcands.fit_mass > 4.8) #&\
+
+#                   (bcands.k.isMatchedToEle == 0) & (bcands.k.isMatchedToSoftMuon == 0) & \
+
 #                   (bcands.l_xy_sig > 1.)
 #                   (bcands.fit_k_pt > 3) & (bcands.k.DCASig > 2) & (bcands.fit_pt > 3) & \
 #                   (bcands.svprob > 0.1) & (bcands.fit_cos2D > 0.999) & \
@@ -218,6 +239,16 @@ for fname in infiles:
     df['B_ls'        ] = sel_bcands.l_xy_sig
     df['B_mll'       ] = sel_bcands.mll_llfit
 
+    df['k_genPdgId'  ] = sel_bcands.k.genPdgId
+    df['e1_genPdgId' ] = sel_bcands.e1.genPdgId
+    df['e2_genPdgId' ] = sel_bcands.e2.genPdgId
+    df['k_genMumId'  ] = sel_bcands.k.motherPdgId
+    df['e1_genMumId' ] = sel_bcands.e1.motherPdgId
+    df['e2_genMumId' ] = sel_bcands.e2.motherPdgId
+    df['e1_genGMaId' ] = sel_bcands.e1.granmaPdgId
+    df['e2_genGMaId' ] = sel_bcands.e2.granmaPdgId
+    
+
     # df['trgmu_eta'] = sel_bcands.trg_mu.p4.eta
     # df['trgmu_pt'] = sel_bcands.trg_mu.p4.pt
     
@@ -227,11 +258,15 @@ for fname in infiles:
 print('DONE! Processed events: ', nprocessed)
 print('Saved events:', final_df.shape[0])
 
-
+# import pdb; pdb.set_trace()
 import numpy as np
-out = uproot.recreate(f_out, compression = uproot.LZMA(8))
 
-out['tree'] = uproot.newtree({'e1_pt'       : "float",
+out = uproot.recreate(f_out)#, compression = uproot.LZMA(8))
+out['tree'] = uproot.newtree({
+                              'event'           : "float",
+                              'run'             : "float",
+                              'luminosityBlock' : "float",
+                              'e1_pt'       : "float",
                               'e2_pt'       : "float",
                               'k_pt'        : "float",
                               'e1_phi'      : "float",
@@ -262,42 +297,63 @@ out['tree'] = uproot.newtree({'e1_pt'       : "float",
                               'B_cos'       : "float",
                               'B_ls'        : "float",
                               'B_mll'       : "float",
+                              'e1_genPdgId' : "float",
+                              'e2_genPdgId' : "float",
+                              'k_genPdgId'  : "float",
+                              'e1_genMumId' : "float",
+                              'e2_genMumId' : "float",
+                              'k_genMumId'  : "float",
+                              'e1_genGMaId' : "float",
+                              'e2_genGMaId' : "float",
                              })
 
-out['tree'].extend({'e1_pt'       : np.array(df['e1_pt' ]),
-                    'e2_pt'       : np.array(df['e2_pt' ]),
-                    'k_pt'        : np.array(df['k_pt'  ]),
-                    'e1_phi'      : np.array(df['e1_phi']),
-                    'e2_phi'      : np.array(df['e2_phi']),
-                    'k_phi'       : np.array(df['k_phi' ]),
-                    'e1_eta'      : np.array(df['e1_eta']),
-                    'e2_eta'      : np.array(df['e2_eta']),
-                    'k_eta'       : np.array(df['k_eta' ]),
-                    'e1_isPF'     : np.array(df['e1_isPF'     ]),
-                    'e2_isPF'     : np.array(df['e2_isPF'     ]),
-                    'e1_pfOverlap': np.array(df['e1_pfOverlap']),
-                    'e2_pfOverlap': np.array(df['e2_pfOverlap']),
-                    'e1_mvaId'    : np.array(df['e1_mvaId'    ]),
-                    'e2_mvaId'    : np.array(df['e2_mvaId'    ]),
-                    'e1_unBDT'    : np.array(df['e1_unBDT'    ]),
-                    'e2_unBDT'    : np.array(df['e2_unBDT'    ]),
-                    'e1_dxyS'     : np.array(df['e1_dxyS'     ]),
-                    'e2_dxyS'     : np.array(df['e2_dxyS'     ]),
-                    'k_DCA'       : np.array(df['k_DCA'      ]),
-                    'k_dxyS'      : np.array(df['k_dxyS'     ]),
-                    'B_charge'    : np.array(df['B_charge'   ]),
-                    'B_mass'      : np.array(df['B_mass'     ]),
-                    'B_mass_err'  : np.array(df['B_mass_err' ]),
-                    'B_pt'        : np.array(df['B_pt'       ]),
-                    'B_eta'       : np.array(df['B_eta'      ]),
-                    'B_phi'       : np.array(df['B_phi'      ]),
-                    'B_svprob'    : np.array(df['B_svprob'   ]),
-                    'B_cos'       : np.array(df['B_cos'      ]),
-                    'B_ls'        : np.array(df['B_ls'       ]),
-                    'B_mll'       : np.array(df['B_mll'      ]),
+out['tree'].extend({
+                    'event'       : np.array(final_df['event' ]),
+                    'run'         : np.array(final_df['run' ]),
+                    'luminosityBlock' : np.array(final_df['luminosityBlock' ]),
+                    'e1_pt'       : np.array(final_df['e1_pt' ]),
+                    'e2_pt'       : np.array(final_df['e2_pt' ]),
+                    'k_pt'        : np.array(final_df['k_pt'  ]),
+                    'e1_phi'      : np.array(final_df['e1_phi']),
+                    'e2_phi'      : np.array(final_df['e2_phi']),
+                    'k_phi'       : np.array(final_df['k_phi' ]),
+                    'e1_eta'      : np.array(final_df['e1_eta']),
+                    'e2_eta'      : np.array(final_df['e2_eta']),
+                    'k_eta'       : np.array(final_df['k_eta' ]),
+                    'e1_isPF'     : np.array(final_df['e1_isPF'     ]),
+                    'e2_isPF'     : np.array(final_df['e2_isPF'     ]),
+                    'e1_pfOverlap': np.array(final_df['e1_pfOverlap']),
+                    'e2_pfOverlap': np.array(final_df['e2_pfOverlap']),
+                    'e1_mvaId'    : np.array(final_df['e1_mvaId'    ]),
+                    'e2_mvaId'    : np.array(final_df['e2_mvaId'    ]),
+                    'e1_unBDT'    : np.array(final_df['e1_unBDT'    ]),
+                    'e2_unBDT'    : np.array(final_df['e2_unBDT'    ]),
+                    'e1_dxyS'     : np.array(final_df['e1_dxyS'     ]),
+                    'e2_dxyS'     : np.array(final_df['e2_dxyS'     ]),
+                    'k_DCA'       : np.array(final_df['k_DCA'       ]),
+                    'k_dxyS'      : np.array(final_df['k_dxyS'      ]),
+                    'B_charge'    : np.array(final_df['B_charge'    ]),
+                    'B_mass'      : np.array(final_df['B_mass'      ]),
+                    'B_mass_err'  : np.array(final_df['B_mass_err'  ]),
+                    'B_pt'        : np.array(final_df['B_pt'        ]),
+                    'B_eta'       : np.array(final_df['B_eta'       ]),
+                    'B_phi'       : np.array(final_df['B_phi'       ]),
+                    'B_svprob'    : np.array(final_df['B_svprob'    ]),
+                    'B_cos'       : np.array(final_df['B_cos'       ]),
+                    'B_ls'        : np.array(final_df['B_ls'        ]),
+                    'B_mll'       : np.array(final_df['B_mll'       ]),
+                    'e1_genPdgId' : np.array(final_df['e1_genPdgId' ]),
+                    'e2_genPdgId' : np.array(final_df['e2_genPdgId' ]),
+                    'k_genPdgId'  : np.array(final_df['k_genPdgId'  ]),
+                    'e1_genMumId' : np.array(final_df['e1_genMumId' ]),
+                    'e2_genMumId' : np.array(final_df['e2_genMumId' ]),
+                    'k_genMumId'  : np.array(final_df['k_genMumId'  ]),
+                    'e1_genGMaId' : np.array(final_df['e1_genGMaId' ]),
+                    'e2_genGMaId' : np.array(final_df['e2_genGMaId' ]),
                    })
 
-# # out['tree'] = final_df
+# # out['tree'] = final_final_df
 # # uproot.newtree({'a' : np.int32, 'b' : np.float32})
 # # out["tree"].extend({'a' : np.array([1,2,3,4]), 'b' : np.array([1.1, 2.2, 3.3, 4.4])})
 out.close()
+

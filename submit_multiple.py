@@ -50,7 +50,7 @@ else:
 
 nf_per_job = int(options.nfiles)
 
-n_jobs  = int(tot_n_files/nf_per_job)
+n_jobs  = int(tot_n_files/float(nf_per_job))
 # n_jobs = int(math.ceil(tot_n_files / nf_per_job ))
 
 
