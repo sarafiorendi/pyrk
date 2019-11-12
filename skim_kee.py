@@ -64,7 +64,6 @@ branches = [
  'Electron_mvaId',
  'Electron_ptBiased',
  'Electron_unBiased',
- 'Electron_genPartIdx',
  'Muon_pt',
  'Muon_eta',
  'Muon_phi',
@@ -72,7 +71,6 @@ branches = [
  'Muon_pt',
  'Muon_vz',
  'Muon_isTriggering',
- 'Muon_genPartIdx',
  'ProbeTracks_DCASig',
  'ProbeTracks_dxyS',
  'ProbeTracks_pt',
@@ -82,22 +80,26 @@ branches = [
  'ProbeTracks_vz',
  'ProbeTracks_isMatchedToEle',
  'ProbeTracks_isMatchedToSoftMuon',
- 'ProbeTracks_genPartIdx',
  'nBToKEE',
  'nElectron',
  'nMuon',
  'nProbeTracks',
  'HLT_*',
- 'nGenPart',    ## always load n for the vector length
- 'GenPart_pdgId',
- 'GenPart_pt',
- 'GenPart_eta',
- 'GenPart_phi',
- 'GenPart_mass',
- 'GenPart_genPartIdxMother',
 ]
 
-
+if args.mc:
+    branches.extend([
+        'nGenPart',    ## always load n for the vector length
+        'GenPart_pdgId',
+        'GenPart_pt',
+        'GenPart_eta',
+        'GenPart_phi',
+        'GenPart_mass',
+        'GenPart_genPartIdxMother',
+        'ProbeTracks_genPartIdx',
+        'Muon_genPartIdx',
+        'Electron_genPartIdx',
+    ])
 nprocessed = 0
 
 from pdb import set_trace
@@ -111,32 +113,33 @@ for fname in infiles:
     tracks    = nf['ProbeTracks']
     hlt       = nf['HLT']
     bcands    = nf['BToKEE']
-    gen       = nf['GenPart']
 
     nprocessed += hlt.shape[0]
+    gen       = nf['GenPart']
+
+    # MC Matching
+    if args.mc:
+        # electrons
+        ele_gen_idx = (electrons.genPartIdx != -1) * electrons.genPartIdx
+        electrons['genPdgId'] = gen[ ele_gen_idx ].pdgId
+        electrons['isGenEle'] = abs(electrons['genPdgId']) == 11
+        
+        mom_gen_idx = (gen[ele_gen_idx].genPartIdxMother != -1) * (gen[ele_gen_idx].genPartIdxMother)
+        #     hasMother   = gen[ ele_gen_idx ].genPartIdxMother != -1
+        electrons['motherPdgId'] = gen[mom_gen_idx].pdgId
+        
+        
+        jpsi_ele = electrons['isGenEle'] * (electrons.motherPdgId == 443)
+        gma_gen_idx = (gen[mom_gen_idx].genPartIdxMother != -1) * (gen[mom_gen_idx].genPartIdxMother)
+        jpsi_mum = jpsi_ele * gen[gma_gen_idx] 
+        electrons['granmaPdgId'] = jpsi_mum.pdgId
+        
+        trk_gen_idx = (tracks.genPartIdx != -1) * tracks.genPartIdx
+        tracks['genPdgId']       = gen[trk_gen_idx].pdgId
+        trk_mom_gen_idx = (gen[trk_gen_idx].genPartIdxMother != -1) * (gen[trk_gen_idx].genPartIdxMother)
+        tracks['motherPdgId']    = gen[trk_mom_gen_idx].pdgId
+
     # Attach the objects to the candidates
-#     set_trace()
-    ele_gen_idx = (electrons.genPartIdx != -1) * electrons.genPartIdx
-    electrons['genPdgId'] = gen[ ele_gen_idx ].pdgId
-    electrons['isGenEle'] = abs(electrons['genPdgId']) == 11
-
-    mom_gen_idx = (gen[ele_gen_idx].genPartIdxMother != -1) * (gen[ele_gen_idx].genPartIdxMother)
-#     hasMother   = gen[ ele_gen_idx ].genPartIdxMother != -1
-    electrons['motherPdgId'] = gen[mom_gen_idx].pdgId
-
-
-    jpsi_ele = electrons['isGenEle'] * (electrons.motherPdgId == 443)
-    gma_gen_idx = (gen[mom_gen_idx].genPartIdxMother != -1) * (gen[mom_gen_idx].genPartIdxMother)
-    jpsi_mum = jpsi_ele * gen[gma_gen_idx] 
-    electrons['granmaPdgId'] = jpsi_mum.pdgId
-
-    
-#     set_trace()
-    trk_gen_idx = (tracks.genPartIdx != -1) * tracks.genPartIdx
-    tracks['genPdgId']       = gen[trk_gen_idx].pdgId
-    trk_mom_gen_idx = (gen[trk_gen_idx].genPartIdxMother != -1) * (gen[trk_gen_idx].genPartIdxMother)
-    tracks['motherPdgId']    = gen[trk_mom_gen_idx].pdgId
-
     bcands['e1'] = electrons[bcands['l1Idx']]
     bcands['e2'] = electrons[bcands['l2Idx']]
     bcands['k'] = tracks[bcands['kIdx']]
@@ -176,22 +179,21 @@ for fname in infiles:
     
     
     # Candidate selection, cut-based for the moment
-    
     b_selection = (bcands.e1.mvaId > -10.) & (bcands.e2.mvaId > -10.)  &\
                   (bcands.fit_mass > 4.8) #&\
+    ##              (bcands.k.isMatchedToEle == 0) & (bcands.k.isMatchedToSoftMuon == 0) & \
+    ##              (bcands.l_xy_sig > 1.)
+    ##              (bcands.fit_k_pt > 3) & (bcands.k.DCASig > 2) & (bcands.fit_pt > 3) & \
+    ##              (bcands.svprob > 0.1) & (bcands.fit_cos2D > 0.999) & \
+    
+    ## For data: keep only one in 1000 events
+    if not args.mc:
+        b_selection = b_selection & (nf['event'] % 1000 == 0)
 
-#                   (bcands.k.isMatchedToEle == 0) & (bcands.k.isMatchedToSoftMuon == 0) & \
-
-#                   (bcands.l_xy_sig > 1.)
-#                   (bcands.fit_k_pt > 3) & (bcands.k.DCASig > 2) & (bcands.fit_pt > 3) & \
-#                   (bcands.svprob > 0.1) & (bcands.fit_cos2D > 0.999) & \
-        
     sel_bcands = bcands[b_selection].flatten()
 
     ## we should find a way to remove the candidates with lowPt eles overlapped with PF only
     ## if the corresponding B candidate made from PFs is passing pre-selections
-
-
     
     df = pd.DataFrame()
     df['event'] = sel_bcands['event']
@@ -239,14 +241,15 @@ for fname in infiles:
     df['B_ls'        ] = sel_bcands.l_xy_sig
     df['B_mll'       ] = sel_bcands.mll_llfit
 
-    df['k_genPdgId'  ] = sel_bcands.k.genPdgId
-    df['e1_genPdgId' ] = sel_bcands.e1.genPdgId
-    df['e2_genPdgId' ] = sel_bcands.e2.genPdgId
-    df['k_genMumId'  ] = sel_bcands.k.motherPdgId
-    df['e1_genMumId' ] = sel_bcands.e1.motherPdgId
-    df['e2_genMumId' ] = sel_bcands.e2.motherPdgId
-    df['e1_genGMaId' ] = sel_bcands.e1.granmaPdgId
-    df['e2_genGMaId' ] = sel_bcands.e2.granmaPdgId
+    if args.mc:
+        df['k_genPdgId'  ] = sel_bcands.k.genPdgId 
+        df['e1_genPdgId' ] = sel_bcands.e1.genPdgId 
+        df['e2_genPdgId' ] = sel_bcands.e2.genPdgId
+        df['k_genMumId'  ] = sel_bcands.k.motherPdgId
+        df['e1_genMumId' ] = sel_bcands.e1.motherPdgId
+        df['e2_genMumId' ] = sel_bcands.e2.motherPdgId
+        df['e1_genGMaId' ] = sel_bcands.e1.granmaPdgId
+        df['e2_genGMaId' ] = sel_bcands.e2.granmaPdgId
     
 
     # df['trgmu_eta'] = sel_bcands.trg_mu.p4.eta
@@ -260,97 +263,14 @@ print('Saved events:', final_df.shape[0])
 
 # import pdb; pdb.set_trace()
 import numpy as np
-
+# convert all unsigned integer to signed, as the streaming is not implemented yet
+unsigned_patch = {np.dtype(f'uint{i}') : np.dtype(f'int{i}') for i in [8, 16, 32, 64]}
 out = uproot.recreate(f_out)#, compression = uproot.LZMA(8))
 out['tree'] = uproot.newtree({
-                              'event'           : "float",
-                              'run'             : "float",
-                              'luminosityBlock' : "float",
-                              'e1_pt'       : "float",
-                              'e2_pt'       : "float",
-                              'k_pt'        : "float",
-                              'e1_phi'      : "float",
-                              'e2_phi'      : "float",
-                              'k_phi'       : "float",
-                              'e1_eta'      : "float",
-                              'e2_eta'      : "float",
-                              'k_eta'       : "float",
-                              'e1_isPF'     : "float",
-                              'e2_isPF'     : "float",
-                              'e1_pfOverlap': "float",
-                              'e2_pfOverlap': "float",
-                              'e1_mvaId'    : "float",
-                              'e2_mvaId'    : "float",
-                              'e1_unBDT'    : "float",
-                              'e2_unBDT'    : "float",
-                              'e1_dxyS'     : "float",
-                              'e2_dxyS'     : "float",
-                              'k_DCA'       : "float",
-                              'k_dxyS'      : "float",
-                              'B_charge'    : "float",
-                              'B_mass'      : "float",
-                              'B_mass_err'  : "float",
-                              'B_pt'        : "float",
-                              'B_eta'       : "float",
-                              'B_phi'       : "float",
-                              'B_svprob'    : "float",
-                              'B_cos'       : "float",
-                              'B_ls'        : "float",
-                              'B_mll'       : "float",
-                              'e1_genPdgId' : "float",
-                              'e2_genPdgId' : "float",
-                              'k_genPdgId'  : "float",
-                              'e1_genMumId' : "float",
-                              'e2_genMumId' : "float",
-                              'k_genMumId'  : "float",
-                              'e1_genGMaId' : "float",
-                              'e2_genGMaId' : "float",
-                             })
-
-out['tree'].extend({
-                    'event'       : np.array(final_df['event' ]),
-                    'run'         : np.array(final_df['run' ]),
-                    'luminosityBlock' : np.array(final_df['luminosityBlock' ]),
-                    'e1_pt'       : np.array(final_df['e1_pt' ]),
-                    'e2_pt'       : np.array(final_df['e2_pt' ]),
-                    'k_pt'        : np.array(final_df['k_pt'  ]),
-                    'e1_phi'      : np.array(final_df['e1_phi']),
-                    'e2_phi'      : np.array(final_df['e2_phi']),
-                    'k_phi'       : np.array(final_df['k_phi' ]),
-                    'e1_eta'      : np.array(final_df['e1_eta']),
-                    'e2_eta'      : np.array(final_df['e2_eta']),
-                    'k_eta'       : np.array(final_df['k_eta' ]),
-                    'e1_isPF'     : np.array(final_df['e1_isPF'     ]),
-                    'e2_isPF'     : np.array(final_df['e2_isPF'     ]),
-                    'e1_pfOverlap': np.array(final_df['e1_pfOverlap']),
-                    'e2_pfOverlap': np.array(final_df['e2_pfOverlap']),
-                    'e1_mvaId'    : np.array(final_df['e1_mvaId'    ]),
-                    'e2_mvaId'    : np.array(final_df['e2_mvaId'    ]),
-                    'e1_unBDT'    : np.array(final_df['e1_unBDT'    ]),
-                    'e2_unBDT'    : np.array(final_df['e2_unBDT'    ]),
-                    'e1_dxyS'     : np.array(final_df['e1_dxyS'     ]),
-                    'e2_dxyS'     : np.array(final_df['e2_dxyS'     ]),
-                    'k_DCA'       : np.array(final_df['k_DCA'       ]),
-                    'k_dxyS'      : np.array(final_df['k_dxyS'      ]),
-                    'B_charge'    : np.array(final_df['B_charge'    ]),
-                    'B_mass'      : np.array(final_df['B_mass'      ]),
-                    'B_mass_err'  : np.array(final_df['B_mass_err'  ]),
-                    'B_pt'        : np.array(final_df['B_pt'        ]),
-                    'B_eta'       : np.array(final_df['B_eta'       ]),
-                    'B_phi'       : np.array(final_df['B_phi'       ]),
-                    'B_svprob'    : np.array(final_df['B_svprob'    ]),
-                    'B_cos'       : np.array(final_df['B_cos'       ]),
-                    'B_ls'        : np.array(final_df['B_ls'        ]),
-                    'B_mll'       : np.array(final_df['B_mll'       ]),
-                    'e1_genPdgId' : np.array(final_df['e1_genPdgId' ]),
-                    'e2_genPdgId' : np.array(final_df['e2_genPdgId' ]),
-                    'k_genPdgId'  : np.array(final_df['k_genPdgId'  ]),
-                    'e1_genMumId' : np.array(final_df['e1_genMumId' ]),
-                    'e2_genMumId' : np.array(final_df['e2_genMumId' ]),
-                    'k_genMumId'  : np.array(final_df['k_genMumId'  ]),
-                    'e1_genGMaId' : np.array(final_df['e1_genGMaId' ]),
-                    'e2_genGMaId' : np.array(final_df['e2_genGMaId' ]),
-                   })
+    c : unsigned_patch.get(final_df[c].dtype, final_df[c].dtype) 
+    for c in final_df.columns
+})
+out['tree'].extend({c : final_df[c].values for c in final_df.columns})
 
 # # out['tree'] = final_final_df
 # # uproot.newtree({'a' : np.int32, 'b' : np.float32})
