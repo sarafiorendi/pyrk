@@ -11,12 +11,12 @@ parser.add_option("-n"  , "--njobs"  , dest = "njobs"  , help = "tot number of i
 parser.add_option("-f"  , "--nfiles" , dest = "nfiles" , help = "choose number of files per job.Default is 1"    , default =  1                            )
 parser.add_option("-c"  , "--chan"   , dest = "channel", help = "Kee, Kmm, ..."                                  , default = "Kee"                        )
 parser.add_option("-d"  , "--outdir" , dest = "outdir" , help = "output dir"                                     , default = "default_folder"             )
+parser.add_option("-m"  , "--mc"     , dest = "mc"     , help = "is mc or data? mc = True, data = False"         , default=False, action='store_true'      )
 
 parser.add_option("-t"  , "--test"   , dest = "test"   ,  help = "do not submit to queue"                        , default = False, action='store_true')
 parser.add_option("--print"          , dest = "printN" ,  help = "print infos"                                   , default = False, action='store_true'      )
 
 parser.add_option("-S"  , "--start"  , dest = "start"  , help = "choose starting file"                           , default =  0                            )
-parser.add_option("-m"  , "--mc"     , dest = "mc"     , help = "is mc or data? mc = True, data = False"         , default=False, action='store_true'      )
 # parser.add_option("-l"  , "--list"   , dest = "inputfiles" ,  help = "input file list"                           , default = "samples.py"                  )
 
 (options,args) = parser.parse_args()  
