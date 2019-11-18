@@ -18,6 +18,7 @@ parser.add_argument("-d"  , "--outdir" , dest = "outdir" , help = "output dir"  
 parser.add_argument("-t"  , "--test"   , dest = "test"   ,  help = "do not submit to queue"                        , default = False, action='store_true')
 parser.add_argument("--print"          , dest = "printN" ,  help = "print infos"                                   , default = False, action='store_true'      )
 parser.add_argument("-S"  , "--start"  , dest = "start"  , help = "choose starting file"                           , default =  0                            )
+parser.add_argument("-f"  , "--flavour", help = "job flavour (sets running time) https://indico.cern.ch/event/731021/contributions/3013463/attachments/1656036/2651022/18-05-24_HTCondor_CMG.pdf", default =  'microcentury', choices = ['espresso', 'microcentury', 'longlunch', 'workday', 'tomorrow', 'testmatch', 'nextweek'])
 args = parser.parse_args()
 
 ## Env variables
@@ -97,7 +98,7 @@ use_x509userproxy = $ENV(X509_USER_PROXY)
 Should_Transfer_Files = YES
 WhenToTransferOutput = ON_EXIT
 getenv = True
-+JobFlavour = "microcentury"
++JobFlavour = "{args.flavour}"
 {cmg_accounting}
 requirements = (OpSysAndVer =?= "CentOS7")
     
