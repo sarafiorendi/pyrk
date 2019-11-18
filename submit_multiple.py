@@ -1,122 +1,119 @@
+#! /bin/env python
+
 import os
 import subprocess
 import datetime
-from optparse import OptionParser
+from argparse import ArgumentParser
 import pdb
 import math
+from samples import samples, users
+from glob import glob
+from pdb import set_trace
 
-parser = OptionParser()
-parser.add_option("-e"  , "--era"    , dest = "era"    , help = "data era (2018B_p1,2018B_p2...)"                , default=  'JpsiEE_MC'                   )
-parser.add_option("-n"  , "--njobs"  , dest = "njobs"  , help = "tot number of input files to be read. All = -1" , default = -1                            )
-parser.add_option("-f"  , "--nfiles" , dest = "nfiles" , help = "choose number of files per job.Default is 1"    , default =  1                            )
-parser.add_option("-c"  , "--chan"   , dest = "channel", help = "Kee, Kmm, ..."                                  , default = "Kee"                        )
-parser.add_option("-d"  , "--outdir" , dest = "outdir" , help = "output dir"                                     , default = "default_folder"             )
+parser = ArgumentParser()
+parser.add_argument("analyzer", help = "which analyser to run", default = 'BJpsiK_ee_mc' )
+parser.add_argument("samples", help = "samples", nargs = '+', choices = samples.keys(), default = 'BJpsiK_ee_mc_2019Oct25' )
+parser.add_argument("-n"  , "--njobs"  , dest = "njobs"  , type = int, help = "tot number of input files to be read. All = -1" , default = -1                            )
+parser.add_argument("-d"  , "--outdir" , dest = "outdir" , help = "output dir"                                     , default = "ntuples" )
+parser.add_argument("-t"  , "--test"   , dest = "test"   ,  help = "do not submit to queue"                        , default = False, action='store_true')
+parser.add_argument("--print"          , dest = "printN" ,  help = "print infos"                                   , default = False, action='store_true'      )
+parser.add_argument("-S"  , "--start"  , dest = "start"  , help = "choose starting file"                           , default =  0                            )
+args = parser.parse_args()
 
-parser.add_option("-t"  , "--test"   , dest = "test"   ,  help = "do not submit to queue"                        , default = False, action='store_true')
-parser.add_option("--print"          , dest = "printN" ,  help = "print infos"                                   , default = False, action='store_true'      )
+## Env variables
+user_info = users.get(os.environ["USER"], users['default'])
+eos_out_folder = user_info['out']
+cmg_accounting = '+AccountingGroup = "group_u_CMST3.all"' if user_info['cmg'] else ''
 
-parser.add_option("-S"  , "--start"  , dest = "start"  , help = "choose starting file"                           , default =  0                            )
-parser.add_option("-m"  , "--mc"     , dest = "mc"     , help = "is mc or data? mc = True, data = False"         , default=False, action='store_true'      )
-# parser.add_option("-l"  , "--list"   , dest = "inputfiles" ,  help = "input file list"                           , default = "samples.py"                  )
+conda_loc = os.environ['CONDA_EXE'].replace('bin/conda', 'etc/profile.d/conda.csh')
+conda_env = os.environ['CONDA_DEFAULT_ENV']
 
-(options,args) = parser.parse_args()  
+script_loc = os.path.realpath(args.analyzer)
+channel = os.path.basename(args.analyzer).replace('.py', '')
 
-eos_out_folder = '/eos/cms/store/cmst3/user/fiorendi/parking2018/ntuples/'
-
-from samples import *
-
-if options.printN:
-    print '** output folder in eos:**\n', eos_out_folder, '\n'
-    print '** possible samples: **\n', 
-    for k,v in era_dict.items():
-        print k, '\t', v 
-    print '\n'
+if args.printN:
+    print('** output folder in eos:**\n', eos_out_folder, '\n')
+    print('** possible samples: **\n') 
+    for k,v in samples.items():
+        print(k, '\t', v['path'])
+    print('\n')
     exit()
 
 key = datetime.datetime.strftime(
     datetime.datetime.now(), '%Y%h%d_%H%M'
 )
 
-## create file list based on the selected era
-f_list_name = 'file_list_%s.txt'%options.era
-os.system('ls %s/000*/*.root > %s'%(era_dict[options.era],f_list_name))
-datapath = os.path.realpath(f_list_name)
-
-## calculate n jobs to be submitted 
-if options.njobs == -1:
-    tot_n_files = int( os.popen('ls %s/000*/*.root | wc -l'%(era_dict[options.era])).read().strip())
-else:    
-    tot_n_files = int(options.njobs)
-
-nf_per_job = int(options.nfiles)
-
-n_jobs  = int(tot_n_files/float(nf_per_job))
-# n_jobs = int(math.ceil(tot_n_files / nf_per_job ))
-
-
-# name     = os.path.basename(options.script).split('.')[0]
-name = 'skim_kee.py'
-
-## local out folder for logs
-newfolder = 'ntuples/' + options.outdir    
-subprocess.check_call(['mkdir', newfolder]) 
-subprocess.check_call(['mkdir', newfolder+'/scripts']) 
-subprocess.check_call(['mkdir', newfolder+'/outCondor']) 
-
-# import pdb; pdb.set_trace()
-## eos output folder for root files
-subprocess.check_call(['mkdir', eos_out_folder + newfolder.replace('ntuples/', '')]) 
-
-## write batch.sh script
-bname = newfolder + '/scripts/batch.sh'
-with open(bname, 'w') as batch:
-    batch.write('''#!/bin/tcsh
-
-source /afs/cern.ch/user/f/fiorendi//miniconda3/etc/profile.d/conda.csh
+for sample_name in args.samples:
+    sample = samples[sample_name]
+    ## local out folder for logs
+    base_out = f'{args.outdir}/{channel}/{sample_name}'
+    os.makedirs(f'{base_out}/scripts')
+    os.makedirs(f'{base_out}/outCondor')
+    
+    ## eos output folder for root files
+    full_eos_out = f'{eos_out_folder}/{base_out}/'
+    os.makedirs(full_eos_out) 
+    
+    ## create file list based on the selected era
+    f_list_name = f'{base_out}/scripts/file_list_{sample_name}.txt'
+    flist = glob(f'{sample["path"]}/000*/*.root')
+    with open(f_list_name, 'w') as f_list:
+        f_list.write(
+            '\n'.join(
+                flist
+                )
+            )
+    datapath = os.path.realpath(f_list_name)
+    
+    ## calculate n jobs to be submitted 
+    if args.njobs == -1:
+        tot_n_files = len(flist)
+    else:    
+        tot_n_files = args.njobs
+    
+    n_jobs  = int(tot_n_files/float(sample['splitting']))
+    
+    ## write batch.sh script
+    bname = os.path.realpath(f'{base_out}/scripts/batch.sh')
+    mc_flag = '--mc' if sample.get('isMC', False) else ''
+    with open(bname, 'w') as batch:
+        batch.write(f'''#!/bin/tcsh
+    
+source {conda_loc}
 conda deactivate
 
-conda activate pyrk_env_sara
-echo 'python /afs/cern.ch/work/f/fiorendi/private/parking/pyrk/pyrk/skim_kee.py $1 $2 $3 $4'
-time python /afs/cern.ch/work/f/fiorendi/private/parking/pyrk/pyrk/skim_kee.py $1 $2 $3 $4
-mv *.root {out} 
-'''.format(out = eos_out_folder + newfolder.replace('ntuples/', ''))
-)
-subprocess.call(['chmod', '+x', bname])
-
-# setenv PATH /afs/cern.ch/user/f/fiorendi//miniconda3/bin:$PATH
-
-## write the cfg for condor submission condor_multiple_readnano.cfg
-with open(newfolder + '/condor_sub.cfg', 'w') as cfg:
-    cfg.write('''Universe = vanilla
-Executable = {script}
+conda activate {conda_env}
+echo "python {script_loc} $1 $2 $3 $4 {mc_flag}"
+time python {script_loc} $1 $2 $3 $4 {mc_flag}
+mv *.root {full_eos_out} 
+''')
+    subprocess.call(['chmod', '+x', bname])
+    
+    ## write the cfg for condor submission condor_multiple_readnano.cfg
+    with open(f'{base_out}/condor_sub.cfg', 'w') as cfg:
+        cfg.write(f'''Universe = vanilla
+Executable = {bname}
 use_x509userproxy = $ENV(X509_USER_PROXY)
 Should_Transfer_Files = YES
 WhenToTransferOutput = ON_EXIT
-transfer_input_files = {datapath}
 getenv = True
-+AccountingGroup = "group_u_CMST3.all"
++JobFlavour = "microcentury"
+{cmg_accounting}
 requirements = (OpSysAndVer =?= "CentOS7")
     
-Log    = {out}/outCondor/condor_job_$(Process).log
-Output = {out}/outCondor/condor_job_$(Process).out
-Error  = {out}/outCondor/condor_job_$(Process).err
-Arguments = {datapath} ntuple_{key}_{chan}_{era}_$(Process).root {njobs} $(Process)
-Queue {njobs}
-'''.format(script   = bname,
-           datapath = f_list_name,
-           out   = newfolder,
-           key   = key,
-           chan  = options.channel ,
-           era   = options.era,
-           njobs = n_jobs,
-           ))
+Log    = {base_out}/outCondor/condor_job_$(Process).log
+Output = {base_out}/outCondor/condor_job_$(Process).out
+Error  = {base_out}/outCondor/condor_job_$(Process).err
+Arguments = {datapath} ntuple_{key}_{channel}_{sample_name}_$(Process).root {n_jobs} $(Process)
+Queue {n_jobs}
+        ''')
+        
+    # +MaxRuntime = 160600
+    # environment = "LS_SUBCWD=/afs/cern.ch/work/f/fiorendi/private/parking/read_nano//eos/cms/store/user/fiorendi/parking/readnano/jpsimc_ee_kcvf"
+    # request_memory = 2000
+    # +JobFlavour = "longlunch"
     
-# +MaxRuntime = 160600
-# environment = "LS_SUBCWD=/afs/cern.ch/work/f/fiorendi/private/parking/read_nano//eos/cms/store/user/fiorendi/parking/readnano/jpsimc_ee_kcvf"
-# request_memory = 2000
-# +JobFlavour = "longlunch"
-
-# submit to the queue
-print 'condor_submit {CFG}'.format(CFG = newfolder + '/condor_sub.cfg')
-if not options.test:
-    os.system("condor_submit {CFG}".format(CFG = newfolder + '/condor_sub.cfg'))   
+    # submit to the queue
+    print('condor_submit {CFG}'.format(CFG = f'{base_out}/condor_sub.cfg'))
+    if not args.test:
+        os.system("condor_submit {CFG}".format(CFG = f'{base_out}/condor_sub.cfg'))   
