@@ -49,24 +49,35 @@ class NanoFrame():
             subset = [k for k in self.keys_ if k.startswith(branch)]
             info = {i.replace(branch, '') : self.array(i) for i in subset}
             counter = 'n' + key
-            counts = 0
+            counts = None
+            
             if counter in self.keys_:
                 counts = self.array(counter)
+            elif all(isinstance(i, awk.JaggedArray) for i in info.values()): # In case counter is missing by mistake
+                print(f'You probably forgot to ask to load {counter} as a branch. Inferring it...')
+                counts = info[list(info.keys())[0]].counts
+
+            if counts is not None:
                 for name, branch in info.items():
                     if not (branch.counts == counts).all():
                         raise ValueError(f'Key {name} does not have the right shape')
-                info = {i : j.content for i, j in info.items()}
+
             #check that everything is there to make a p4
-            if all(i in info for i in ['pt', 'eta', 'phi', 'mass']): # FIXME! wrong logic
+            if counts is not None and all(i in info for i in ['pt', 'eta', 'phi', 'mass']): 
+                # flatted to use candidatesfromcounts, better option available?
+                info = {i : j.content for i, j in info.items()}
                 ret = JaggedCandidateArray.candidatesfromcounts(
                     counts,
                     **info
                 )
-            else:
+            elif counts is not None: # Not enough to make a JaggedCandidateArray, but a jagged table
+                ret = awk.JaggedArray.zip(**info)
+            else: # flat object
                 ret = awk.Table(**info)
+                # check if p4 can be made, with MET fix for missing eta and mass
                 if all(i in info for i in ['pt', 'phi']): 
                     ret['p4'] = uproot_methods.TLorentzVectorArray.from_ptetaphi(
-                        ret['pt'], 0, ret['phi'], 0
+                        info['pt'], info.get('eta', 0), info['phi'], info.get('mass', 0)
                     )
             
             self.table_[key] = ret
