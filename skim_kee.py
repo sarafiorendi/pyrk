@@ -51,6 +51,8 @@ branches = [
  'BToKEE_fit_l2_eta',
  'BToKEE_fit_l2_pt',
  'BToKEE_fit_l2_phi',
+ 'BToKEE_maxDR',
+ 'BToKEE_minDR',
 
  'Electron_isLowPt',
  'Electron_isPF',
@@ -115,10 +117,10 @@ for fname in infiles:
     bcands    = nf['BToKEE']
 
     nprocessed += hlt.shape[0]
-    gen       = nf['GenPart']
 
     # MC Matching
     if args.mc:
+        gen       = nf['GenPart']
         # electrons
         ele_gen_idx = (electrons.genPartIdx != -1) * electrons.genPartIdx
         electrons['genPdgId'] = gen[ ele_gen_idx ].pdgId
@@ -149,6 +151,17 @@ for fname in infiles:
     bcands['event']           = nf['event']
     bcands['run']             = nf['run']
     bcands['luminosityBlock'] = nf['luminosityBlock']    
+
+    bcands['HLT_Mu7_IP4'     ] = nf['HLT_Mu7_IP4' ]
+    bcands['HLT_Mu8_IP3'     ] = nf['HLT_Mu8_IP3' ]
+    bcands['HLT_Mu8_IP5'     ] = nf['HLT_Mu8_IP5' ]
+    bcands['HLT_Mu8_IP6'     ] = nf['HLT_Mu8_IP6' ]
+    bcands['HLT_Mu9_IP4'     ] = nf['HLT_Mu9_IP4' ]
+    bcands['HLT_Mu9_IP5'     ] = nf['HLT_Mu9_IP5' ]
+    bcands['HLT_Mu9_IP6'     ] = nf['HLT_Mu9_IP6' ]
+    bcands['HLT_Mu12_IP6'    ] = nf['HLT_Mu12_IP6']
+    bcands['HLT_Mu8p5_IP3p5' ] = nf['HLT_Mu8p5_IP3p5']
+    bcands['HLT_Mu10p5_IP3p5'] = nf['HLT_Mu10p5_IP3p5']
 
     l_xy_sig = bcands.l_xy / bcands.l_xy_unc
     l_xy_sig[np.invert(np.isfinite(l_xy_sig))] = -99
@@ -188,7 +201,7 @@ for fname in infiles:
     
     ## For data: keep only one in 1000 events
     if not args.mc:
-        b_selection = b_selection & (nf['event'] % 1000 == 0)
+        b_selection = b_selection & (nf['event'] % 100 == 0)
 
     sel_bcands = bcands[b_selection].flatten()
 
@@ -240,6 +253,19 @@ for fname in infiles:
     df['B_cos'       ] = sel_bcands.fit_cos2D
     df['B_ls'        ] = sel_bcands.l_xy_sig
     df['B_mll'       ] = sel_bcands.mll_llfit
+    df['B_minDR'     ] = sel_bcands.minDR
+    df['B_maxDR'     ] = sel_bcands.maxDR
+
+    df['HLT_Mu7_IP4'     ] = sel_bcands['HLT_Mu7_IP4' ]
+    df['HLT_Mu8_IP3'     ] = sel_bcands['HLT_Mu8_IP3' ]
+    df['HLT_Mu8_IP5'     ] = sel_bcands['HLT_Mu8_IP5' ]
+    df['HLT_Mu8_IP6'     ] = sel_bcands['HLT_Mu8_IP6' ]
+    df['HLT_Mu9_IP4'     ] = sel_bcands['HLT_Mu9_IP4' ]
+    df['HLT_Mu9_IP5'     ] = sel_bcands['HLT_Mu9_IP5' ]
+    df['HLT_Mu9_IP6'     ] = sel_bcands['HLT_Mu9_IP6' ]
+    df['HLT_Mu12_IP6'    ] = sel_bcands['HLT_Mu12_IP6']
+    df['HLT_Mu8p5_IP3p5' ] = sel_bcands['HLT_Mu8p5_IP3p5']
+    df['HLT_Mu10p5_IP3p5'] = sel_bcands['HLT_Mu10p5_IP3p5']
 
     if args.mc:
         df['k_genPdgId'  ] = sel_bcands.k.genPdgId 

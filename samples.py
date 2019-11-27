@@ -29,6 +29,11 @@ samples = {
         'isMC' : True,
         'splitting' : 5,
     },
+    'BKee_mc_2019Nov25' : {
+        'path' : f'{genericPath}/BParkingNANO_2019Nov25/BuToKee_Mufilter_SoftQCDnonD_TuneCP5_13TeV-pythia8-evtgen/crab_BuToKee_ext/191125_084413/',
+        'isMC' : True,
+        'splitting' : 5,
+    },
 
     ## DATA
     '2018A_BPH2_2019Oct21' : {
@@ -36,8 +41,28 @@ samples = {
         'isMC' : False,
         'splitting' : 10,
     },
+    '2018A_BPH3_2019Oct21' : {
+        'path' : f'{genericPath}/BParkingNANO_2019Oct21/ParkingBPH3/crab_data_Run2018A_part3/191021_131508/',
+        'isMC' : False,
+        'splitting' : 10,
+    },
     '2018B_BPH2_2019Oct21' : {
         'path' : f'{genericPath}/BParkingNANO_2019Oct21/ParkingBPH2/crab_data_Run2018B_part2/191021_131046/',
+        'isMC' : False,
+        'splitting' : 10,
+    },
+    '2018B_BPH3_2019Oct21' : {
+        'path' : f'{genericPath}/BParkingNANO_2019Oct21/ParkingBPH3/crab_data_Run2018B_part3/191021_131207/',
+        'isMC' : False,
+        'splitting' : 10,
+    },
+    '2018C_BPH3_2019Oct31' : {
+        'path' : f'{genericPath}/BParkingNANO_2019Oct31/ParkingBPH3/crab_data_Run2018C_part3/191031_114404/',
+        'isMC' : False,
+        'splitting' : 10,
+    },
+    '2018D_BPH3_2019Oct31' : {
+        'path' : f'{genericPath}/BParkingNANO_2019Oct31/ParkingBPH3/crab_data_Run2018D_part3/191031_114316/',
         'isMC' : False,
         'splitting' : 10,
     },
