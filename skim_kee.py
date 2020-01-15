@@ -12,7 +12,7 @@ import particle
 import pandas as pd
 import uproot_methods
 
-
+pion_mass = 0.13957061
 
 final_df = pd.DataFrame()
 
@@ -54,6 +54,15 @@ branches = [
  'BToKEE_maxDR',
  'BToKEE_minDR',
 
+ 'BToKEE_l1_iso03',
+ 'BToKEE_l2_iso03',
+ 'BToKEE_k_iso03',
+ 'BToKEE_b_iso03',
+ 'BToKEE_l1_iso04',
+ 'BToKEE_l2_iso04',
+ 'BToKEE_k_iso04',
+ 'BToKEE_b_iso04',
+
  'Electron_isLowPt',
  'Electron_isPF',
  'Electron_isPFoverlap',
@@ -66,6 +75,7 @@ branches = [
  'Electron_mvaId',
  'Electron_ptBiased',
  'Electron_unBiased',
+ 'Electron_charge',
  'Muon_pt',
  'Muon_eta',
  'Muon_phi',
@@ -148,6 +158,20 @@ for fname in infiles:
     bcands['p4fit'] = uproot_methods.TLorentzVectorArray.from_ptetaphim(
         bcands['fit_pt'], bcands['fit_eta'], bcands['fit_phi'], bcands['fit_mass']
     )
+
+    ## mixed combinations for background rejection (hopefully)
+    bcands['k_e1'] = bcands['k'].p4+bcands['e1'].p4
+    bcands['k_e2'] = bcands['k'].p4+bcands['e2'].p4
+
+    bcands['e1_mpi'] = uproot_methods.TLorentzVectorArray.from_ptetaphim(
+        bcands['e1'].p4.pt, bcands['e1'].p4.eta,  bcands['e1'].p4.phi, pion_mass    
+    )
+    bcands['e2_mpi'] = uproot_methods.TLorentzVectorArray.from_ptetaphim(
+        bcands['e2'].p4.pt, bcands['e2'].p4.eta,  bcands['e2'].p4.phi, pion_mass    
+    )
+    bcands['k_pi1'] = bcands['k'].p4+bcands['e1_mpi']
+    bcands['k_pi2'] = bcands['k'].p4+bcands['e2_mpi']
+
     bcands['event']           = nf['event']
     bcands['run']             = nf['run']
     bcands['luminosityBlock'] = nf['luminosityBlock']    
@@ -200,7 +224,7 @@ for fname in infiles:
     ##              (bcands.svprob > 0.1) & (bcands.fit_cos2D > 0.999) & \
     
     ## For data: keep only one in 1000 events
-    if not args.mc:
+    if not args.mc and args.skim:
         b_selection = b_selection & (nf['event'] % 100 == 0)
 
     sel_bcands = bcands[b_selection].flatten()
@@ -232,16 +256,19 @@ for fname in infiles:
     df['e1_unBDT'    ] = sel_bcands.e1.unBiased
     df['e2_unBDT'    ] = sel_bcands.e2.unBiased
 
+
     e1_dxyS = sel_bcands.e1.dxy/sel_bcands.e1.dxyErr
     e1_dxyS[np.invert(np.isfinite(e1_dxyS))] = -99
     e2_dxyS = sel_bcands.e2.dxy/sel_bcands.e2.dxyErr
     e2_dxyS[np.invert(np.isfinite(e2_dxyS))] = -99
     df['e1_dxyS'    ] =  e1_dxyS
     df['e2_dxyS'    ] =  e2_dxyS
-
         
     df['k_DCA'       ] = sel_bcands.k.DCASig
     df['k_dxyS'      ] = sel_bcands.k.dxyS
+
+    df['e1_charge'   ] = sel_bcands.e1.charge
+    df['e2_charge'   ] = sel_bcands.e2.charge
 
     df['B_charge'    ] = sel_bcands.charge
     df['B_mass'      ] = sel_bcands.fit_mass
@@ -266,7 +293,21 @@ for fname in infiles:
     df['HLT_Mu12_IP6'    ] = sel_bcands['HLT_Mu12_IP6']
     df['HLT_Mu8p5_IP3p5' ] = sel_bcands['HLT_Mu8p5_IP3p5']
     df['HLT_Mu10p5_IP3p5'] = sel_bcands['HLT_Mu10p5_IP3p5']
+    
+    df['k_e1_mass' ] = sel_bcands['k_e1'].mass
+    df['k_e2_mass' ] = sel_bcands['k_e2'].mass
+    df['k_pi1_mass'] = sel_bcands['k_pi1'].mass
+    df['k_pi2_mass'] = sel_bcands['k_pi2'].mass
 
+    df['e1_iso03'    ] = sel_bcands['l1_iso03']
+    df['e2_iso03'    ] = sel_bcands['l2_iso03']
+    df['k_iso03'     ] = sel_bcands['k_iso03' ]
+    df['b_iso03'     ] = sel_bcands['b_iso03' ]
+    df['e1_iso04'    ] = sel_bcands['l1_iso04']
+    df['e2_iso04'    ] = sel_bcands['l2_iso04']
+    df['k_iso04'     ] = sel_bcands['k_iso04' ]
+    df['b_iso04'     ] = sel_bcands['b_iso04' ]
+    
     if args.mc:
         df['k_genPdgId'  ] = sel_bcands.k.genPdgId 
         df['e1_genPdgId' ] = sel_bcands.e1.genPdgId 
