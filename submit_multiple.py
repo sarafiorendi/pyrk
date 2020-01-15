@@ -1,4 +1,4 @@
-#! /bin/env python
+# ! /bin/env python
 
 import os
 import subprocess
@@ -15,6 +15,7 @@ parser.add_argument("analyzer", help = "which analyser to run", default = 'BJpsi
 parser.add_argument("samples", help = "samples", nargs = '+', choices = samples.keys(), default = 'BJpsiK_ee_mc_2019Oct25' )
 parser.add_argument("-n"  , "--njobs"  , dest = "njobs"  , type = int, help = "tot number of input files to be read. All = -1" , default = -1                            )
 parser.add_argument("-d"  , "--outdir" , dest = "outdir" , help = "output dir"                                     , default = "ntuples" )
+parser.add_argument("-a"  , "--addtag" , dest = "addtag" , help = "add tag to output dir"                          , default = "ntuples" )
 parser.add_argument("-t"  , "--test"   , dest = "test"   ,  help = "do not submit to queue"                        , default = False, action='store_true')
 parser.add_argument("--print"          , dest = "printN" ,  help = "print infos"                                   , default = False, action='store_true'      )
 parser.add_argument("-S"  , "--start"  , dest = "start"  , help = "choose starting file"                           , default =  0                            )
@@ -47,7 +48,7 @@ key = datetime.datetime.strftime(
 for sample_name in args.samples:
     sample = samples[sample_name]
     ## local out folder for logs
-    base_out = f'{args.outdir}/{channel}/{sample_name}'
+    base_out = f'{args.outdir}/{channel}/{sample_name}_{args.addtag}'
     os.makedirs(f'{base_out}/scripts')
     os.makedirs(f'{base_out}/outCondor')
     
@@ -94,7 +95,7 @@ mv *.root {full_eos_out}
     with open(f'{base_out}/condor_sub.cfg', 'w') as cfg:
         cfg.write(f'''Universe = vanilla
 Executable = {bname}
-use_x509userproxy = $ENV(X509_USER_PROXY)
+use_x509userproxy = True 
 Should_Transfer_Files = YES
 WhenToTransferOutput = ON_EXIT
 getenv = True
